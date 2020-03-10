@@ -63,12 +63,13 @@ fn signout_filter(state: BoxedFilter<State>) -> BoxedFilter<Response> {
         .and(state)
         .and_then(async move |session_cookie: Option<String>, state: State| -> FilterResult<Response> {
             async {
-                let session_id = parse_uuid_optional(session_cookie)?;
                 let conn = state.db_pool().get().await?;
-                let _ = conn.execute(
-                    "DELETE FROM session WHERE id = $1",
-                    &[&session_id],
-                );
+                if let Ok(session_id) = parse_uuid_optional(session_cookie) {
+                    let _ = conn.execute(
+                        "DELETE FROM session WHERE id = $1",
+                        &[&session_id],
+                    ).await;
+                }
                 Ok(response::set_cookie("session_id=; Path=/; HttpOnly".to_owned()))
             }
             .await
