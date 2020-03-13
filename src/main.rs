@@ -13,8 +13,8 @@ use filter::*;
 use argument::parse_arguments;
 use state::{State, init_pool};
 
-const DEFAULT_PORT: &'static str = "8001";
-const PG_CONFIG: &'static str = "host=localhost user=postgres dbname=postgres";
+const DEFAULT_PORT: &'static str = "80";
+const PG_CONFIG: &'static str = "host=postgres-server user=postgres dbname=postgres";
 
 #[tokio::main]
 async fn main() {
@@ -33,5 +33,5 @@ async fn main() {
     warp::serve(
         get_filter
         .or(post_filter)
-    ).run(([127, 0, 0, 1], port)).await;
+    ).run(([0, 0, 0, 0], port)).await;
 }
