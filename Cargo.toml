@@ -1,5 +1,5 @@
 [package]
-name = "pikit-restful-server"
+name = "pigskit-restful-server"
 version = "0.1.0"
 authors = ["davidwu <david6906817@gmail.com>"]
 edition = "2018"
