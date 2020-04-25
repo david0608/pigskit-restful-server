@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 warp = "0.2"
 tokio-postgres = { version = "0.5", features = ["with-uuid-0_8"] }
+postgres-types = { version = "0.1", features = ["derive"] }
 bb8 = "0.4"
 bb8-postgres = "0.4"
 tokio = { version = "0.2", features = ["macros"] }

@@ -44,6 +44,26 @@ impl Into<String> for Error {
     }
 }
 
+impl Into<ErrorMessage> for Error {
+    fn into(self) -> ErrorMessage {
+        let code: String = match &self {
+            Self::Sql(error) => {
+                if let Some(sqlstate) = error.code() {
+                    sqlstate.code().to_string()
+                } else {
+                    "0".to_string()
+                }
+            },
+            _ => "0".to_string(),
+        };
+
+        ErrorMessage {
+            code: code,
+            message: self.into(),
+        }
+    }
+}
+
 impl Reply for Error {
     fn into_response(self) -> Response {
         let status = match self {
@@ -51,10 +71,7 @@ impl Reply for Error {
             Self::Sql(_) | Self::Uuid(_) => StatusCode::BAD_REQUEST,
         };
 
-        let msg = ErrorMessage {
-            code: status.as_u16(),
-            message: self.into(),
-        };
+        let msg: ErrorMessage = self.into();
 
         with_status(json(&msg), status).into_response()
     }
@@ -62,6 +79,6 @@ impl Reply for Error {
 
 #[derive(Serialize)]
 struct ErrorMessage {
-    code: u16,
+    code: String,
     message: String,
 }

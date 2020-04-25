@@ -1,5 +1,4 @@
 #[macro_use] mod db;
-#[macro_use] mod sql;
 
 pub use db::{Pool, init_pool};
 

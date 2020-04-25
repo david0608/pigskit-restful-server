@@ -2,19 +2,19 @@
 
 #[macro_use] extern crate serde_derive;
 
-use warp::Filter;
-
-#[macro_use] mod error;
-#[macro_use] mod state;
+mod error;
+mod state;
+#[macro_use] mod sql;
 mod filter;
 mod argument;
 
-use filter::*;
+use filter::routes;
 use argument::parse_arguments;
 use state::{State, init_pool};
 
 const DEFAULT_PORT: &'static str = "80";
 const PG_CONFIG: &'static str = "host=postgres-server user=postgres dbname=postgres";
+const PG_CONFIG_DEV: &'static str = "host=localhost user=postgres dbname=postgres";
 
 #[tokio::main]
 async fn main() {
@@ -23,15 +23,14 @@ async fn main() {
 
     let args = parse_arguments();
     let port = args.value_of("port").unwrap().parse::<u16>().expect("parse argument PORT.");
+    let pg_config = if args.is_present("dev") {
+        PG_CONFIG_DEV
+    } else {
+        PG_CONFIG
+    };
 
-    let db_pool = init_pool(PG_CONFIG, 16).await;
-    let state = map_state(State::init(db_pool));
+    let db_pool = init_pool(pg_config, 16).await;
+    let routes = routes(State::init(db_pool));
 
-    let get_filter = warp::get().and(get_access_filter(state.clone()));
-    let post_filter = warp::post().and(post_access_filter(state.clone()));
-
-    warp::serve(
-        get_filter
-        .or(post_filter)
-    ).run(([0, 0, 0, 0], port)).await;
+    warp::serve(routes).run(([0, 0, 0, 0], port)).await;
 }
