@@ -1,8 +1,12 @@
 use warp::{
-    Reply,
+    reply::{
+        reply,
+        Reply,
+        with_header,
+        Response,
+    },
     http,
     redirect,
-    reply::{Response, reply, with_header}
 };
 
 pub fn set_cookie(cookie: String) -> Response {

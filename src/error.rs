@@ -1,5 +1,6 @@
 use warp::{
     Reply,
+    reject::Reject,
     http::StatusCode,
     reply::{Response, json, with_status},
 };
@@ -9,6 +10,8 @@ pub enum Error {
     Pool(bb8::RunError::<tokio_postgres::error::Error>),
     Sql(tokio_postgres::error::Error),
     Uuid(uuid::Error),
+    Warp(warp::Error),
+    Io(std::io::Error),
     Other(&'static str),
 }
 
@@ -18,6 +21,8 @@ impl std::fmt::Display for Error {
             Self::Pool(err) => write!(f, "Pool error: {}", err),
             Self::Sql(err) => write!(f, "Sql error: {}", err),
             Self::Uuid(err) => write!(f, "Uuid error: {}", err),
+            Self::Warp(err) => write!(f, "Warp error: {}", err),
+            Self::Io(err) => write!(f, "IO error: {}", err),
             Self::Other(err) => write!(f, "Other error: {}", err),
         }
     }
@@ -36,43 +41,43 @@ macro_rules! impl_from_for_error {
 impl_from_for_error!(bb8::RunError<tokio_postgres::error::Error>, Pool);
 impl_from_for_error!(tokio_postgres::error::Error, Sql);
 impl_from_for_error!(uuid::Error, Uuid);
+impl_from_for_error!(warp::Error, Warp);
+impl_from_for_error!(std::io::Error, Io);
 impl_from_for_error!(&'static str, Other);
 
-impl Into<String> for Error {
+impl Into<String> for &Error {
     fn into(self) -> String {
         format!("{}", self)
     }
 }
 
-impl Into<ErrorMessage> for Error {
-    fn into(self) -> ErrorMessage {
-        let code: String = match &self {
-            Self::Sql(error) => {
+impl From<&Error> for ErrorMessage {
+    fn from(err: &Error) -> Self {
+        let code: String = match err {
+            Error::Sql(error) => {
                 if let Some(sqlstate) = error.code() {
                     sqlstate.code().to_string()
                 } else {
                     "0".to_string()
                 }
             },
-            _ => "0".to_string(),
+            _ => "0".to_string()
         };
 
         ErrorMessage {
             code: code,
-            message: self.into(),
+            message: err.into()
         }
     }
 }
 
-impl Reply for Error {
+impl Reply for &Error {
     fn into_response(self) -> Response {
         let status = match self {
-            Self::Pool(_) | Self::Other(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::Sql(_) | Self::Uuid(_) => StatusCode::BAD_REQUEST,
+            Error::Pool(_) | Error::Other(_) | Error::Warp(_) | Error::Io(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::Sql(_) | Error::Uuid(_) => StatusCode::BAD_REQUEST,
         };
-
-        let msg: ErrorMessage = self.into();
-
+        let msg = ErrorMessage::from(self);
         with_status(json(&msg), status).into_response()
     }
 }
@@ -82,3 +87,5 @@ struct ErrorMessage {
     code: String,
     message: String,
 }
+
+impl Reject for Error {}

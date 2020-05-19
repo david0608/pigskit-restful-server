@@ -13,9 +13,12 @@ postgres-types = { version = "0.1", features = ["derive"] }
 bb8 = "0.4"
 bb8-postgres = "0.4"
 tokio = { version = "0.2", features = ["macros"] }
+futures = "0.3"
 uuid = { version = "0.8", features = ["serde", "v4"] }
 clap = "2.33"
 log = "0.4"
 env_logger = "0.7"
 serde = "1.0.0"
 serde_derive = "1.0.0"
+bytes = "0.5"
+lazy_static = "1.4"

@@ -5,6 +5,7 @@ use std::{
 };
 use postgres_types::{ToSql, FromSql};
 use serde::de::{self, Deserialize, Deserializer};
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, ToSql, FromSql)]
 #[postgres(name = "permission")]
@@ -18,18 +19,53 @@ pub enum Permission {
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSql, FromSql)]
+#[postgres(name = "permission_nn")]
+pub struct PermissionNN(pub Permission);
+
+#[derive(Serialize, Deserialize, Debug, ToSql, FromSql)]
+#[postgres(name = "authority")]
+pub enum Authority {
+    #[postgres(name = "team_authority")]
+    TeamAuthority,
+    #[postgres(name = "store_authority")]
+    StoreAuthority,
+    #[postgres(name = "product_authority")]
+    ProductAuthority,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSql, FromSql)]
+#[postgres(name = "authority_nn")]
+pub struct AuthorityNN(pub Authority);
+
+#[derive(Serialize, Deserialize, Debug, ToSql, FromSql)]
 #[postgres(name = "text_nn")]
-pub struct TextNN(String);
+pub struct TextNN(pub String);
+
+#[derive(Serialize, Deserialize, Debug, ToSql, FromSql)]
+#[postgres(name = "text_nz")]
+pub struct TextNZ(pub String);
 
 #[derive(Serialize, Deserialize, Debug, ToSql, FromSql)]
 #[postgres(name = "int_nn")]
-pub struct IntNN(i32);
+pub struct IntNN(pub i32);
 
 impl FromStr for IntNN {
     type Err = ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(IntNN(i32::from_str(s)?))
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSql, FromSql)]
+#[postgres(name = "uuid_nn")]
+pub struct UuidNN(pub Uuid);
+
+impl FromStr for UuidNN {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(UuidNN(Uuid::parse_str(s)?))
     }
 }
 
@@ -57,5 +93,36 @@ macro_rules! query_one {
             },
             Err(error) => Err(error),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use postgres_types::{ToSql, FromSql};
+    use crate::state::init_pool;
+    use crate::PG_CONFIG_DEV;
+    use super::{
+        TextNZ,
+        IntNN,
+    };
+
+    #[derive(Serialize, Deserialize, Debug, ToSql, FromSql)]
+    #[postgres(name = "option")]
+    struct SqlOption {
+        name: TextNZ,
+        price: IntNN,
+    }
+
+    #[tokio::test]
+    async fn test_option() {
+        let pool = init_pool(PG_CONFIG_DEV, 1).await;
+        let conn = pool.get().await.unwrap();
+        let (opt,) = query_one!(
+            conn,
+            "SELECT option_create('new', 123)",
+            &[],
+            (option_create: SqlOption),
+        ).unwrap();
+        println!("opt:{:?}", opt);
     }
 }
