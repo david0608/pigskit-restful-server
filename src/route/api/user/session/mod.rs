@@ -3,7 +3,8 @@ use warp::{
     reply::{
         Reply,
         Response,
-        html,
+        json,
+        Json,
     },
     reject,
     filters::BoxedFilter,
@@ -11,14 +12,12 @@ use warp::{
     get,
     delete,
     path,
-    cookie,
     body,
 };
 use uuid::Uuid;
 use crate::{
     route::utils::{
-        filter,
-        parse_uuid_optional,
+        filter::cookie,
         response,
         handler::HandlerResult,
     },
@@ -38,29 +37,31 @@ struct CreateArgs {
 
 fn create_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     post()
-    .and(cookie::optional("session_id"))
+    .and(cookie::to_uuid_optional("USSID"))
     .and(body::json())
     .and(state)
-    .and_then(async move |session_cookie: Option<String>, args: CreateArgs, state: State| -> HandlerResult<Response> {
+    .and_then(async move |ussid_cookie: Option<Uuid>, args: CreateArgs, state: State| -> HandlerResult<Response> {
         async {
             let conn = state.db_pool().get().await?;
 
             // Delete the session if existed, or do nothing.
-            if let Ok(session_id) = parse_uuid_optional(session_cookie) {
+            if let Some(ussid) = ussid_cookie {
                 let _ = conn.execute(
                     "SELECT signout_user($1)",
-                    &[&UuidNN(session_id)],
+                    &[&UuidNN(ussid)],
                 ).await;
             }
 
-            let (session_id,) = query_one!(
-                conn,
+            let row = conn.query_one(
                 "SELECT signin_user($1, $2) AS id",
                 &[&args.username, &args.password],
-                (id: Uuid),
-            )?;
-
-            Ok(response::set_cookie(format!("session_id={}; Path=/; HttpOnly", session_id)))
+            ).await?;
+            
+            if let Ok(session_id) = row.try_get::<&str, Uuid>("id") {
+                Ok(response::set_cookie(format!("USSID={}; Path=/; HttpOnly", session_id)))
+            } else {
+                return Err(Error::permission_denied())
+            }
         }
         .await
         .map_err(|err: Error| reject::custom(err))
@@ -68,41 +69,50 @@ fn create_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     .boxed()
 }
 
-fn read_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
+#[derive(Serialize)]
+struct GetRes {
+    username: Option<String>,
+    nickname: Option<String>,
+}
+fn get_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     get()
-    .and(filter::cookie::session_user_id(state.clone()))
-    .and_then(async move |_user_id: Uuid| -> HandlerResult<Response> {
-        Ok(response::redirect_to("/api/user/session/success"))
+    .and(cookie::to_user_id("USSID", state.clone()))
+    .and(state)
+    .and_then(async move |user_id: Uuid, state: State| -> HandlerResult<Json> {
+        async {
+            let conn = state.db_pool().get().await?;
+            let row = conn.query_one(
+                "SELECT username, nickname FROM users WHERE id = $1",
+                &[&user_id],
+            ).await?;
+            Ok(json(&GetRes {
+                username: row.get("username"),
+                nickname: row.get("nickname"),
+            }))
+        }
+        .await
+        .map_err(|err: Error| reject::custom(err))
     })
     .boxed()
 }
 
 fn delete_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     delete()
-    .and(cookie::optional("session_id"))
+    .and(cookie::to_uuid_optional("USSID"))
     .and(state)
-    .and_then(async move |session_cookie: Option<String>, state: State| -> HandlerResult<Response> {
+    .and_then(async move |ussid_cookie: Option<Uuid>, state: State| -> HandlerResult<Response> {
         async {
             let conn = state.db_pool().get().await?;
-            if let Ok(session_id) = parse_uuid_optional(session_cookie) {
+            if let Some(ussid) = ussid_cookie {
                 let _ = conn.execute(
                     "SELECT signout_user($1)",
-                    &[&UuidNN(session_id)],
+                    &[&UuidNN(ussid)],
                 ).await;
             }
-            Ok(response::set_cookie("session_id=; Path=/; HttpOnly".to_owned()))
+            Ok(response::set_cookie("USSID=; Path=/; HttpOnly".to_owned()))
         }
         .await
         .map_err(|err: Error| reject::custom(err))
-    })
-    .boxed()
-}
-
-fn success_filter() -> BoxedFilter<(impl Reply,)> {
-    get()
-    .and(cookie::cookie("session_id"))
-    .map(|session_id: String| {
-        html(format!("session_id: {}", session_id))
     })
     .boxed()
 }
@@ -110,9 +120,8 @@ fn success_filter() -> BoxedFilter<(impl Reply,)> {
 pub fn filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     path::end().and(
         create_filter(state.clone())
-        .or(read_filter(state.clone()))
+        .or(get_filter(state.clone()))
         .or(delete_filter(state.clone()))
     )
-    .or(success_filter())
     .boxed()
 }

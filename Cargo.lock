@@ -819,6 +819,7 @@ dependencies = [
  "lazy_static",
  "log 0.4.8",
  "postgres-types",
+ "regex",
  "serde",
  "serde_derive",
  "tokio",

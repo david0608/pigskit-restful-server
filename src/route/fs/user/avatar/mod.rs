@@ -23,7 +23,7 @@ use crate::{
 fn update_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     post()
     .and(
-        cookie::session_user_id(state.clone())
+        cookie::to_user_id("USSID", state.clone())
         .map(|user_id: Uuid| {
             format!("{}/user/{}", *STORAGE_DIR, user_id)
         })
@@ -38,7 +38,7 @@ fn update_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
 fn read_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     get()
     .and(
-        cookie::session_user_id(state.clone())
+        cookie::to_user_id("USSID", state.clone())
         .map(|user_id: Uuid| {
             (
                 format!("{}/user/{}/avatar.jpg", *STORAGE_DIR, user_id),
@@ -54,7 +54,7 @@ fn read_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
 fn delete_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     delete()
     .and(
-        cookie::session_user_id(state.clone())
+        cookie::to_user_id("USSID", state.clone())
         .map(|user_id: Uuid| {
             format!("{}/user/{}/avatar.jpg", *STORAGE_DIR, user_id)
         })

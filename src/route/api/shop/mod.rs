@@ -6,7 +6,6 @@ use warp::{
     post,
     path,
     body,
-    cors,
 };
 use uuid::Uuid;
 use crate::{
@@ -35,7 +34,7 @@ struct CreateArgs {
 
 fn create_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     post()
-    .and(cookie::session_user_id(state.clone()))
+    .and(cookie::to_user_id("USSID", state.clone()))
     .and(body::json())
     .and(state)
     .and_then(async move |user_id: Uuid, args: CreateArgs, state: State| -> HandlerResult<&'static str> {
@@ -50,7 +49,6 @@ fn create_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
         .await
         .map_err(|err: Error| reject::custom(err))
     })
-    .with(cors().allow_origin("http://localhost"))
     .boxed()
 }
 

@@ -6,29 +6,57 @@ use warp::{
 };
 use uuid::Uuid;
 use crate::{
-    route::utils::parse_uuid,
     state::State,
     sql::UuidNN,
     error::Error,
 };
 
-pub fn session_user_id(state: BoxedFilter<(State,)>) -> BoxedFilter<(Uuid,)> {
-    cookie::cookie("session_id")
+pub fn to_user_id(name: &'static str, state: BoxedFilter<(State,)>) -> BoxedFilter<(Uuid,)> {
+    to_uuid_optional(name)
     .and(state)
-    .and_then(async move |session_cookie: String, state: State| {
+    .and_then(async move |cookie: Option<Uuid>, state: State| {
         async {
-            let session_id = parse_uuid(session_cookie)?;
-            let conn = state.db_pool().get().await?;
-            let (user_id,) = query_one!(
-                conn,
-                "SELECT get_session_user($1) AS id",
-                &[&UuidNN(session_id)],
-                (id: Uuid),
-            )?;
-            Ok(user_id)
+            if let Some(ussid) = cookie {
+                let conn = state.db_pool().get().await?;
+                let (user_id,) = query_one!(
+                    conn,
+                    "SELECT get_session_user($1) AS id",
+                    &[&UuidNN(ussid)],
+                    (id: Uuid),
+                )?;
+                Ok(user_id)
+            } else {
+                Err(Error::no_valid_cookie(name))
+            }
         }
         .await
         .map_err(|err: Error| reject::custom(err))
+    })
+    .boxed()
+}
+
+pub fn to_uuid_optional(name: &'static str) -> BoxedFilter<(Option<Uuid>,)> {
+    cookie::optional(name)
+    .map(|cookie: Option<String>| {
+        if let Some(s) = cookie {
+            if let Ok(id) = Uuid::parse_str(s.as_str()) {
+                Some(id)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    })
+    .boxed()
+}
+
+pub fn to_uuid(name: &'static str) -> BoxedFilter<(Uuid,)> {
+    to_uuid_optional(name)
+    .and_then(async move |cookie: Option<Uuid>| {
+        cookie.ok_or(
+            reject::custom(Error::no_valid_cookie(name))
+        )
     })
     .boxed()
 }

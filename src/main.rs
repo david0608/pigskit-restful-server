@@ -1,7 +1,5 @@
 #![feature(async_closure)]
 #![feature(type_alias_impl_trait)]
-// #![feature(trait_alias)]
-#![feature(type_ascription)]
 
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate log;

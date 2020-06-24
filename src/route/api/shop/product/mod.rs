@@ -33,7 +33,7 @@ struct CreateArgs {
 
 fn create_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     post()
-    .and(cookie::session_user_id(state.clone()))
+    .and(cookie::to_user_id("USSID", state.clone()))
     .and(body::json())
     .and(state)
     .and_then(async move |user_id: Uuid, args: CreateArgs, state: State| -> HandlerResult<&'static str> {
@@ -45,14 +45,15 @@ fn create_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
                 &[&args.shop_id, &UuidNN(user_id)],
                 (ok: bool),
             )?;
-            if !ok {
-                return Err(Error::Other("Permission denied."));
+            if ok {
+                conn.execute(
+                    "SELECT shop_create_product($1, $2);",
+                    &[&args.shop_id, &args.payload],
+                ).await?;
+                Ok("Successfully created product.")
+            } else {
+                Err(Error::permission_denied())
             }
-            conn.execute(
-                "SELECT shop_create_product($1, $2);",
-                &[&args.shop_id, &args.payload],
-            ).await?;
-            Ok("Successfully created product.")
         }
         .await
         .map_err(|err: Error| reject::custom(err))
@@ -70,7 +71,7 @@ struct DeleteArgs {
 
 fn delete_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     delete()
-    .and(cookie::session_user_id(state.clone()))
+    .and(cookie::to_user_id("USSID", state.clone()))
     .and(body::json())
     .and(state)
     .and_then(async move |user_id: Uuid, args: DeleteArgs, state: State| -> HandlerResult<&'static str> {
@@ -82,14 +83,23 @@ fn delete_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
                 &[&args.shop_id, &UuidNN(user_id)],
                 (ok: bool),
             )?;
-            if !ok {
-                return Err(Error::Other("Permission denied"));
+            if ok {
+                conn.execute(
+                    "SELECT shop_delete_product($1, $2)",
+                    &[&args.shop_id, &args.product_key],
+                ).await?;
+                Ok("Successfully deleted product.")
+            } else {
+                Err(Error::permission_denied())
             }
-            conn.execute(
-                "SELECT shop_delete_product($1, $2)",
-                &[&args.shop_id, &args.product_key],
-            ).await?;
-            Ok("Successfully deleted product.")
+            // if !ok {
+            //     return Err(Error::Other("Permission denied"));
+            // }
+            // conn.execute(
+            //     "SELECT shop_delete_product($1, $2)",
+            //     &[&args.shop_id, &args.product_key],
+            // ).await?;
+            // Ok("Successfully deleted product.")
         }
         .await
         .map_err(|err: Error| reject::custom(err))
@@ -108,7 +118,7 @@ struct UpdateArgs {
 
 fn update_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     patch()
-    .and(cookie::session_user_id(state.clone()))
+    .and(cookie::to_user_id("USSID", state.clone()))
     .and(body::json())
     .and(state)
     .and_then(async move |user_id: Uuid, args: UpdateArgs, state: State| -> HandlerResult<&'static str> {
@@ -120,14 +130,15 @@ fn update_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
                 &[&args.shop_id, &UuidNN(user_id)],
                 (ok: bool),
             )?;
-            if !ok {
-                return Err(Error::Other("Permission denied"));
+            if ok {
+                conn.execute(
+                    "SELECT shop_update_product($1, $2, $3);",
+                    &[&args.shop_id, &args.product_key, &args.payload],
+                ).await?;
+                Ok("Seccessfully updated product.")
+            } else {
+                Err(Error::permission_denied())
             }
-            conn.execute(
-                "SELECT shop_update_product($1, $2, $3);",
-                &[&args.shop_id, &args.product_key, &args.payload],
-            ).await?;
-            Ok("Seccessfully updated product.")
         }
         .await
         .map_err(|err: Error| reject::custom(err))

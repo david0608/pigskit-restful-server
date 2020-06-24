@@ -22,7 +22,10 @@ pub fn store() -> impl Fn(String, String, Vec<u8>) -> StoreResult + Clone {
             fs::write(format!("{}/{}", dir, name), buf)
         })
         .await
-        .or_else(|err| Err(reject::custom(err.into(): Error)))?;
+        .map_err(|err| {
+            let err: Error = err.into();
+            reject::custom(err)
+        })?;
         Ok("Successfully stored.")
     }
 }
@@ -31,10 +34,16 @@ pub async fn read(file: String) -> HandlerResult<Vec<u8>> {
     let mut data = Vec::new();
     fs::File::open(file)
     .await
-    .map_err(|err| reject::custom(err.into(): Error))?
+    .map_err(|err| {
+        let err: Error = err.into();
+        reject::custom(err)
+    })?
     .read_to_end(&mut data)
     .await
-    .map_err(|err| reject::custom(err.into(): Error))?;
+    .map_err(|err| {
+        let err: Error = err.into();
+        reject::custom(err)
+    })?;
     Ok(data)
 }
 
@@ -45,16 +54,25 @@ pub async fn read_with_default(file: String, default_file: String) -> HandlerRes
         fs::File::open(default_file)
     })
     .await
-    .map_err(|err| reject::custom(err.into(): Error))?
+    .map_err(|err| {
+        let err: Error = err.into();
+        reject::custom(err)
+    })?
     .read_to_end(&mut data)
     .await
-    .map_err(|err| reject::custom(err.into(): Error))?;
+    .map_err(|err| {
+        let err: Error = err.into();
+        reject::custom(err)
+    })?;
     Ok(data)
 }
 
 pub async fn delete(file: String) -> HandlerResult<&'static str> {
     fs::remove_file(file)
     .await
-    .map_err(|err| reject::custom(err.into(): Error))?;
+    .map_err(|err| {
+        let err: Error = err.into();
+        reject::custom(err)
+    })?;
     Ok("Successfully deleted.")
 }

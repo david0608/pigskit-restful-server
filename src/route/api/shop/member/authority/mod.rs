@@ -32,7 +32,7 @@ struct UpdateArgs {
 
 fn update_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     patch()
-    .and(cookie::session_user_id(state.clone()))
+    .and(cookie::to_user_id("USSID", state.clone()))
     .and(body::json())
     .and(state)
     .and_then(async move |user_id: Uuid, args: UpdateArgs, state: State| -> HandlerResult<&'static str> {

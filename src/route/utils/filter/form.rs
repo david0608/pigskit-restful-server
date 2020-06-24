@@ -51,12 +51,12 @@ pub fn image(name: &'static str, max_length: u64) -> BoxedFilter<(String, Vec<u8
         })
         .try_collect()
         .await
-        .map_err(|err| err.into(): Error)
+        .map_err(|err| -> Error { err.into() })
         .and_then(|mut collect: Vec<(String, Vec<u8>)>| {
             if collect.len() == 1 {
                 Ok(collect.remove(0))
             } else {
-                Err(Error::Other("No available formdata found."))
+                Err(Error::no_valid_form("image"))
             }
         })
         .map_err(|err| reject::custom(err))

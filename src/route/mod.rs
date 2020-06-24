@@ -36,10 +36,14 @@ pub fn routes(state: State) -> BoxedFilter<(impl Reply,)> {
             Ok(with_status("Not Found.", StatusCode::NOT_FOUND).into_response())
         } else {
             if let Some(error) = rejection.find::<Error>() {
-                info!("Encountered a process error: {}", error);
+                if error.is_inner() {
+                    info!("Encountered a server internal error: {:?}", error);
+                } else {
+                    info!("Encountered an error: {:?}", error);
+                }
                 Ok(error.into_response())
             } else {
-                info!("Encountered an error: {:?}", rejection);
+                info!("Encountered an unhandled error: {:?}", rejection);
                 Err(rejection)
             }
         }
