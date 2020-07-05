@@ -92,14 +92,6 @@ fn delete_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
             } else {
                 Err(Error::permission_denied())
             }
-            // if !ok {
-            //     return Err(Error::Other("Permission denied"));
-            // }
-            // conn.execute(
-            //     "SELECT shop_delete_product($1, $2)",
-            //     &[&args.shop_id, &args.product_key],
-            // ).await?;
-            // Ok("Successfully deleted product.")
         }
         .await
         .map_err(|err: Error| reject::custom(err))

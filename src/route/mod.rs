@@ -9,6 +9,7 @@ use warp::{
     Filter,
     http::StatusCode,
     path,
+    options,
 };
 use crate::{
     state::State,
@@ -48,5 +49,18 @@ pub fn routes(state: State) -> BoxedFilter<(impl Reply,)> {
             }
         }
     })
+    .boxed()
+}
+
+pub fn dev_routes(state: State) -> BoxedFilter<(impl Reply,)> {
+    routes(state)
+    .or(
+        // filter for preflight requests.
+        options().map(warp::reply)
+    )
+    .map(|reply| warp::reply::with_header(reply, "Access-Control-Allow-Headers", "Content-Type"))
+    .map(|reply| warp::reply::with_header(reply, "Access-Control-Allow-Credentials", "true"))
+    .map(|reply| warp::reply::with_header(reply, "Access-Control-Allow-Origin", "http://localhost:3000"))
+    .map(|reply| warp::reply::with_header(reply, "Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, PATCH, DELETE"))
     .boxed()
 }

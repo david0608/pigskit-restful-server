@@ -11,10 +11,7 @@ use uuid::Uuid;
 use crate::{
     route::utils::{
         handler::HandlerResult,
-        filter::{
-            cookie,
-            preflight_filter,
-        },
+        filter::cookie,
     },
     sql::{
         UuidNN,
@@ -55,7 +52,6 @@ fn create_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
 pub fn filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     path::end().and(
         create_filter(state.clone())
-        .or(preflight_filter())
     )
     .or(
         path("member").and(
