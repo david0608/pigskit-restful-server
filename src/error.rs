@@ -19,12 +19,21 @@ pub struct Error {
 }
 
 impl Error {
-    pub fn new(http_status: StatusCode, r#type: String, message: String) -> Self {
+    fn new(http_status: StatusCode, r#type: String, message: String) -> Self {
         Error {
             http_status: http_status,
             r#type: r#type,
             message: message,
             inner: None,
+        }
+    }
+
+    fn internal(inner: InnerError) -> Self {
+        Error {
+            http_status: StatusCode::INTERNAL_SERVER_ERROR,
+            r#type: "InternalServerError".to_string(),
+            message: "Internal server error.".to_string(),
+            inner: Some(inner),
         }
     }
 
@@ -44,11 +53,11 @@ impl Error {
         )
     }
 
-    pub fn permission_denied() -> Self {
+    pub fn unauthorized() -> Self {
         Self::new(
             StatusCode::FORBIDDEN,
             "Unauthorized".to_string(),
-            "Permission denied.".to_string(),
+            "Unauthorized.".to_string(),
         )
     }
 
@@ -100,6 +109,22 @@ impl Error {
         )
     }
 
+    pub fn data_not_found(name: &str) -> Self {
+        Self::new(
+            StatusCode::BAD_REQUEST,
+            "DataNotFound".to_string(),
+            format!(r#"Data "{}" not found."#, name),
+        )
+    }
+
+    pub fn payload_too_large() -> Self {
+        Self::new(
+            StatusCode::BAD_REQUEST,
+            "PayloadTooLarge".to_string(),
+            "Size of request payload too large.".to_string(),
+        )
+    }
+
     pub fn is_inner(&self) -> bool {
         self.inner.is_some()
     }
@@ -124,12 +149,7 @@ macro_rules! impl_from_for_error {
 
         impl From<$from> for Error {
             fn from(err: $from) -> Self {
-                Error {
-                    http_status: StatusCode::INTERNAL_SERVER_ERROR,
-                    r#type: "InternalServerError".to_string(),
-                    message: "Internal server error.".to_string(),
-                    inner: Some(err.into()),
-                }
+                Error::internal(err.into())
             }
         }
     }
@@ -156,28 +176,17 @@ impl From<tokio_postgres::error::Error> for Error {
 
         match code {
             "C2002" => {
-                Error {
-                    http_status: StatusCode::BAD_REQUEST,
-                    r#type: "SessionExpired".to_string(),
-                    message: "Session expired".to_string(),
-                    inner: Some(err.into()),
-                }
+                Error::session_expired("USSID")
             }
             "C5001" => {
-                Error {
-                    http_status: StatusCode::BAD_REQUEST,
-                    r#type: "ShopNameUsed".to_string(),
-                    message: "Shop name has been used.".to_string(),
-                    inner: Some(err.into()),
-                }
+                Error::new(
+                    StatusCode::BAD_REQUEST,
+                    "ShopNameUsed".to_string(),
+                    "Shop name has been used.".to_string(),
+                )
             }
             _ => {
-                Error {
-                    http_status: StatusCode::INTERNAL_SERVER_ERROR,
-                    r#type: "InternalServerError".to_string(),
-                    message: "Internal server error.".to_string(),
-                    inner: Some(err.into()),
-                }
+                Error::internal(err.into())
             }
         }
     }

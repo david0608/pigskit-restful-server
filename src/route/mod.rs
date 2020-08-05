@@ -5,7 +5,10 @@ use warp::{
         with_status,
     },
     filters::BoxedFilter,
-    reject::Rejection,
+    reject::{
+        Rejection,
+        PayloadTooLarge,
+    },
     Filter,
     http::StatusCode,
     path,
@@ -16,9 +19,9 @@ use crate::{
     error::Error,
 };
 
+#[macro_use] mod utils;
 mod api;
 mod fs;
-mod utils;
 
 pub fn routes(state: State) -> BoxedFilter<(impl Reply,)> {
     let state = warp::any().map(move || state.clone()).boxed();
@@ -35,6 +38,9 @@ pub fn routes(state: State) -> BoxedFilter<(impl Reply,)> {
         if rejection.is_not_found() {
             info!("Rejected a request which the end-point was not found.");
             Ok(with_status("Not Found.", StatusCode::NOT_FOUND).into_response())
+        } else if rejection.find::<PayloadTooLarge>().is_some() {
+            info!("Rejected a request which the size of payload too large.");
+            Ok(Error::payload_too_large().into_response())
         } else {
             if let Some(error) = rejection.find::<Error>() {
                 if error.is_inner() {

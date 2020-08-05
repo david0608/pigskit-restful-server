@@ -14,13 +14,32 @@ use crate::{
     error::Error,
 };
 
+pub async fn store(dir: String, name: String, buf: Vec<u8>) -> Result<(), std::io::Error> {
+    fs::create_dir_all(&dir)
+    .and_then(|_| {
+        fs::write(format!("{}/{}", dir, name), buf)
+    })
+    .await
+}
+
+pub async fn read(file: String) -> Result<Vec<u8>, std::io::Error> {
+    let mut data = Vec::new();
+    fs::File::open(file)
+    .await?
+    .read_to_end(&mut data)
+    .await?;
+    Ok(data)
+}
+
+pub async fn delete(file: String) -> Result<(), std::io::Error> {
+    fs::remove_file(file)
+    .await
+}
+
 type StoreResult = impl Future<Output = HandlerResult<&'static str>> + Send;
-pub fn store() -> impl Fn(String, String, Vec<u8>) -> StoreResult + Clone {
+pub fn store_handler() -> impl Fn(String, String, Vec<u8>) -> StoreResult + Clone {
     async move |dir: String, name: String, buf: Vec<u8>| {
-        fs::create_dir_all(&dir)
-        .and_then(|_| {
-            fs::write(format!("{}/{}", dir, name), buf)
-        })
+        store(dir, name, buf)
         .await
         .map_err(|err| {
             let err: Error = err.into();
@@ -30,15 +49,8 @@ pub fn store() -> impl Fn(String, String, Vec<u8>) -> StoreResult + Clone {
     }
 }
 
-pub async fn read(file: String) -> HandlerResult<Vec<u8>> {
-    let mut data = Vec::new();
-    fs::File::open(file)
-    .await
-    .map_err(|err| {
-        let err: Error = err.into();
-        reject::custom(err)
-    })?
-    .read_to_end(&mut data)
+pub async fn read_handler(file: String) -> HandlerResult<Vec<u8>> {
+    let data = read(file)
     .await
     .map_err(|err| {
         let err: Error = err.into();
@@ -47,28 +59,21 @@ pub async fn read(file: String) -> HandlerResult<Vec<u8>> {
     Ok(data)
 }
 
-pub async fn read_with_default(file: String, default_file: String) -> HandlerResult<Vec<u8>> {
-    let mut data = Vec::new();
-    fs::File::open(file)
-    .or_else(|_| {
-        fs::File::open(default_file)
-    })
-    .await
-    .map_err(|err| {
-        let err: Error = err.into();
-        reject::custom(err)
-    })?
-    .read_to_end(&mut data)
-    .await
-    .map_err(|err| {
-        let err: Error = err.into();
-        reject::custom(err)
-    })?;
+pub async fn read_with_default_handler(file: String, default_file: String) -> HandlerResult<Vec<u8>> {
+    let data = read(file)
+        .or_else(|_| {
+            read(default_file)
+        })
+        .await
+        .map_err(|err| {
+            let err: Error = err.into();
+            reject::custom(err)
+        })?;
     Ok(data)
 }
 
-pub async fn delete(file: String) -> HandlerResult<&'static str> {
-    fs::remove_file(file)
+pub async fn delete_handler(file: String) -> HandlerResult<&'static str> {
+    delete(file)
     .await
     .map_err(|err| {
         let err: Error = err.into();

@@ -8,12 +8,24 @@ use warp::{
     patch,
     path,
     body,
+    multipart::{
+        form,
+        FormData,
+    }
 };
+use futures::{
+    TryFutureExt,
+    TryStreamExt,
+};
+use bytes::BufMut;
 use uuid::Uuid;
 use crate::{
     route::utils::{
         filter::cookie,
-        handler::HandlerResult,
+        handler::{
+            fs,
+            HandlerResult,
+        },
     },
     sql::{
         from_str,
@@ -22,38 +34,52 @@ use crate::{
     },
     state::State,
     error::Error,
+    STORAGE_DIR,
 };
-
-#[derive(Serialize, Deserialize)]
-struct CreateArgs {
-    #[serde(deserialize_with = "from_str")]
-    shop_id: UuidNN,
-    payload: TextNN,
-}
 
 fn create_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     post()
     .and(cookie::to_user_id("USSID", state.clone()))
-    .and(body::json())
+    .and(
+        form_filter!(
+            shop_id [ Uuid ]
+            payload [ String ]
+            image [ Option [ Vec<u8> ] ]
+        )
+    )
     .and(state)
-    .and_then(async move |user_id: Uuid, args: CreateArgs, state: State| -> HandlerResult<&'static str> {
+    .and_then(async move |user_id: Uuid, shop_id: Uuid, payload: String, image: Option<Vec<u8>>, state: State| -> HandlerResult<&'static str> {
         async {
-            let conn = state.db_pool().get().await?;
+            let mut connection = state.db_pool().get().await?;
+            let transaction = connection.transaction().await?;
+
             let (ok,) = query_one!(
-                conn,
+                transaction,
                 "SELECT check_shop_user_authority($1, $2, 'product_authority', 'all') AS ok;",
-                &[&args.shop_id, &UuidNN(user_id)],
+                &[&UuidNN(shop_id), &UuidNN(user_id)],
                 (ok: bool),
             )?;
-            if ok {
-                conn.execute(
-                    "SELECT shop_create_product($1, $2);",
-                    &[&args.shop_id, &args.payload],
-                ).await?;
-                Ok("Successfully created product.")
-            } else {
-                Err(Error::permission_denied())
+
+            if !ok { return Err(Error::unauthorized()) }
+
+            let (product_key,) = query_one!(
+                transaction,
+                "SELECT product_key FROM shop_create_product($1, $2);",
+                &[&UuidNN(shop_id), &TextNN(payload)],
+                (product_key: Uuid),
+            )?;
+            
+            if let Some(data) = image {
+                fs::store(
+                    format!("{}/shop/{}/product/{}", *STORAGE_DIR, shop_id, product_key),
+                    "image.jpg".to_string(),
+                    data,
+                )
+                .await?;
             }
+
+            transaction.commit().await?;
+            Ok("Succefully created.")
         }
         .await
         .map_err(|err: Error| reject::custom(err))
@@ -90,7 +116,7 @@ fn delete_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
                 ).await?;
                 Ok("Successfully deleted product.")
             } else {
-                Err(Error::permission_denied())
+                Err(Error::unauthorized())
             }
         }
         .await
@@ -129,7 +155,7 @@ fn update_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
                 ).await?;
                 Ok("Seccessfully updated product.")
             } else {
-                Err(Error::permission_denied())
+                Err(Error::unauthorized())
             }
         }
         .await

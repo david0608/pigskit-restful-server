@@ -1,66 +1,109 @@
-use warp::{
-    Filter,
-    filters::BoxedFilter,
-    reject,
-    multipart::{
-        form,
-        FormData,
-        Part,
-    },
-};
-use futures::{
-    future,
-    TryFutureExt,
-    TryStreamExt,
-};
-use bytes::BufMut;
-use crate::{
-    error::Error,
-};
+#[macro_export]
+macro_rules! form_filter {
+    ( TYPE Option [ $($type:tt)+ ] ) => {
+        Option<$($type)+>
+    };
 
-pub fn image(name: &'static str, max_length: u64) -> BoxedFilter<(String, Vec<u8>)> {
-    form()
-    .max_length(max_length)
-    .and_then(async move |form: FormData| {
-        form.try_filter_map(async move |part| -> Result<Option<(String, Part)>, warp::Error> {
-            if let Some(content_type) = part.content_type() {
-                if part.name() == "image" {
-                    match content_type {
-                        "image/jpeg" => Ok(Some((format!("{}.jpg", name), part))),
-                        _ => Ok(None),
+    ( TYPE $($type:tt)+ ) => {
+        $($type)+
+    };
+
+    ( DECLARE $field:ident Option [ $($type:tt)+ ] ) => {
+        form_filter!( DECLARE $field $($type)+ )
+    };
+
+    ( DECLARE $field:ident $($type:tt)+ ) => {
+        let mut $field: Option<$($type)+> = None;
+    };
+
+    ( PARSE $pair:ident $field:ident Option [ $($type:tt)+ ] ) => {
+        form_filter!( PARSE $pair $field $($type)+ )
+    };
+
+    ( PARSE $pair:ident $field:ident Uuid ) => {
+        if let Ok(id_string) = String::from_utf8($pair.1) {
+            if let Ok(id) = Uuid::parse_str(id_string.as_str()) {
+                $field = Some(id);
+            }
+        }
+    };
+
+    ( PARSE $pair:ident $field:ident String ) => {
+        if let Ok(string) = String::from_utf8($pair.1) {
+            $field = Some(string);
+        }
+    };
+
+    ( PARSE $pair:ident $field:ident Vec<u8> ) => {
+        $field = Some($pair.1);
+    };
+
+    ( CHECK $field:ident Option [ $($type:tt)+ ] ) => {};
+
+    ( CHECK $field:ident $($type:tt)+ ) => {
+        if let None = $field {
+            return Err(Error::no_valid_form(stringify!($field)))
+        }
+    };
+
+    ( UNWRAP $field:ident Option [ $($type:tt)+ ] ) => {
+        $field
+    };
+
+    ( UNWRAP $field:ident $($type:tt)+ ) => {
+        $field.unwrap()
+    };
+
+    ( $( $field:ident [ $($type:tt)+ ] )+ ) => {
+        form()
+        .max_length(2000000)
+        .and_then(async move |form: FormData| -> HandlerResult<($( form_filter!( TYPE $($type)+ ) ),+,)> {
+            async {
+                $(
+                    form_filter!( DECLARE $field $($type)+ );
+                )+
+
+                let pairs: Vec<(String, Vec<u8>)> =
+                    form
+                    .and_then(|part| {
+                        let name = part.name().to_string();
+                        part.stream()
+                        .try_fold(
+                            Vec::new(),
+                            |mut buf, data| {
+                                buf.put(data);
+                                async move { Ok(buf) }
+                            },
+                        )
+                        .map_ok(move |buf| (name, buf))
+                    })
+                    .try_collect()
+                    .await?;
+
+                for pair in pairs {
+                    match pair.0.as_str() {
+                        $(
+                            stringify!($field) => {
+                                form_filter!( PARSE pair $field $($type)+ )
+                            }
+                        )+
+                        _ => {}
                     }
-                } else {
-                    Ok(None)
                 }
-            } else {
-                Ok(None)
+
+                $(
+                    form_filter!( CHECK $field $($type)+ );
+                )+
+
+                Ok((
+                    $(
+                        form_filter!( UNWRAP $field $($type)+ )
+                    ),+,
+                ))
             }
+            .await
+            .map_err(|err: Error| reject::custom(err))
         })
-        .and_then(|(name, part)| {
-            part.stream()
-            .try_fold(
-                Vec::new(),
-                |mut buf, data| {
-                    buf.put(data);
-                    async move { Ok(buf) }
-                },
-            )
-            .and_then(|buf| {
-                future::ok::<(String, Vec<u8>), warp::Error>((name, buf))
-            })
-        })
-        .try_collect()
-        .await
-        .map_err(|err| -> Error { err.into() })
-        .and_then(|mut collect: Vec<(String, Vec<u8>)>| {
-            if collect.len() == 1 {
-                Ok(collect.remove(0))
-            } else {
-                Err(Error::no_valid_form("image"))
-            }
-        })
-        .map_err(|err| reject::custom(err))
-    })
-    .untuple_one()
-    .boxed()
+        .untuple_one()
+    };
 }

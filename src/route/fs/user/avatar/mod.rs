@@ -2,36 +2,52 @@ use warp::{
     Filter,
     reply::Reply,
     filters::BoxedFilter,
+    reject,
     get,
     post,
     delete,
     path,
+    multipart::{
+        form,
+        FormData,
+    }
 };
+use futures::{
+    TryFutureExt,
+    TryStreamExt,
+};
+use bytes::BufMut;
 use uuid::Uuid;
 use crate::{
     route::utils::{
-        filter::{
-            form,
-            cookie,
+        filter::cookie,
+        handler::{
+            HandlerResult,
+            fs
         },
-        handler::fs,
     },
     state::State,
+    error::Error,
     STORAGE_DIR,
 };
 
 fn update_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     post()
+    .and(cookie::to_user_id("USSID", state.clone()))
     .and(
-        cookie::to_user_id("USSID", state.clone())
-        .map(|user_id: Uuid| {
-            format!("{}/user/{}", *STORAGE_DIR, user_id)
-        })
+        form_filter!(
+            image [ Vec<u8> ]
+        )
     )
-    .and(
-        form::image("avatar", 512000)
-    )
-    .and_then(fs::store())
+    .map(|user_id: Uuid, image_data: Vec<u8>| {
+        (
+            format!("{}/user/{}", *STORAGE_DIR, user_id),
+            "avatar.jpg".to_string(),
+            image_data,
+        )
+    })
+    .untuple_one()
+    .and_then(fs::store_handler())
     .boxed()
 }
 
@@ -42,12 +58,12 @@ fn read_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
         .map(|user_id: Uuid| {
             (
                 format!("{}/user/{}/avatar.jpg", *STORAGE_DIR, user_id),
-                format!("{}/user/default/avatar.jpg", *STORAGE_DIR),
+                format!("{}/default/user/avatar.jpg", *STORAGE_DIR),
             )
         })
         .untuple_one()
     )
-    .and_then(fs::read_with_default)
+    .and_then(fs::read_with_default_handler)
     .boxed()
 }
 
@@ -59,7 +75,7 @@ fn delete_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
             format!("{}/user/{}/avatar.jpg", *STORAGE_DIR, user_id)
         })
     )
-    .and_then(fs::delete)
+    .and_then(fs::delete_handler)
     .boxed()
 }
 

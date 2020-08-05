@@ -1,5 +1,5 @@
 use std::{
-    fmt::Display,
+    fmt,
     str::FromStr,
     num::ParseIntError,
 };
@@ -61,6 +61,12 @@ impl FromStr for IntNN {
 #[postgres(name = "uuid_nn")]
 pub struct UuidNN(pub Uuid);
 
+impl fmt::Display for UuidNN {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 impl FromStr for UuidNN {
     type Err = uuid::Error;
 
@@ -71,7 +77,7 @@ impl FromStr for UuidNN {
 
 pub fn from_str<'de, T, D>(deserializer: D) -> Result<T, D::Error>
     where T: FromStr,
-          T::Err: Display,
+          T::Err: fmt::Display,
           D: Deserializer<'de>
 {
     let s = String::deserialize(deserializer)?;

@@ -60,7 +60,7 @@ fn create_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
             if let Ok(session_id) = row.try_get::<&str, Uuid>("id") {
                 Ok(response::set_cookie(format!("USSID={}; Path=/; HttpOnly", session_id)))
             } else {
-                return Err(Error::permission_denied())
+                return Err(Error::unauthorized())
             }
         }
         .await
