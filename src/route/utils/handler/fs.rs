@@ -36,6 +36,11 @@ pub async fn delete(file: String) -> Result<(), std::io::Error> {
     .await
 }
 
+pub async fn delete_all(file: String) -> Result<(), std::io::Error> {
+    fs:: remove_dir_all(file)
+    .await
+}
+
 type StoreResult = impl Future<Output = HandlerResult<&'static str>> + Send;
 pub fn store_handler() -> impl Fn(String, String, Vec<u8>) -> StoreResult + Clone {
     async move |dir: String, name: String, buf: Vec<u8>| {

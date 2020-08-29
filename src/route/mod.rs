@@ -59,10 +59,10 @@ pub fn routes(state: State) -> BoxedFilter<(impl Reply,)> {
 }
 
 pub fn dev_routes(state: State) -> BoxedFilter<(impl Reply,)> {
-    routes(state)
+    // filter for preflight requests.
+    options().map(warp::reply)
     .or(
-        // filter for preflight requests.
-        options().map(warp::reply)
+        routes(state)
     )
     .map(|reply| warp::reply::with_header(reply, "Access-Control-Allow-Headers", "Content-Type"))
     .map(|reply| warp::reply::with_header(reply, "Access-Control-Allow-Credentials", "true"))

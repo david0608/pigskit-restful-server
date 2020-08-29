@@ -178,11 +178,42 @@ impl From<tokio_postgres::error::Error> for Error {
             "C2002" => {
                 Error::session_expired("USSID")
             }
-            "C5001" => {
+            "C3001" => {
+                Error::session_expired("GSSID")
+            }
+            "C4101" => {
+                Error::new(
+                    StatusCode::BAD_REQUEST,
+                    "CusSelNotFound".to_string(),
+                    "Selection not found for the customize.".to_string(),
+                )
+            }
+            "C4301" => {
+                Error::new(
+                    StatusCode::BAD_REQUEST,
+                    "CusSelNotProvided".to_string(),
+                    "Customize selection not provided.".to_string(),
+                )
+            }
+            "C6001" => {
                 Error::new(
                     StatusCode::BAD_REQUEST,
                     "ShopNameUsed".to_string(),
                     "Shop name has been used.".to_string(),
+                )
+            }
+            "C6009" => {
+                Error::new(
+                    StatusCode::BAD_REQUEST,
+                    "ShopProductNotFound".to_string(),
+                    "Product not found for the shop.".to_string(),
+                )
+            }
+            "C8002" => {
+                Error::new(
+                    StatusCode::BAD_REQUEST,
+                    "CartItemNotFound".to_string(),
+                    "Item not found for the cart.".to_string(),
                 )
             }
             _ => {

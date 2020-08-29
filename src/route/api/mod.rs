@@ -10,6 +10,7 @@ use crate::{
 
 mod user;
 mod shop;
+mod cart;
 
 pub fn filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     path("user").and(
@@ -18,6 +19,11 @@ pub fn filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     .or(
         path("shop").and(
             shop::filter(state.clone())
+        )
+    )
+    .or(
+        path("cart").and(
+            cart::filter(state.clone())
         )
     )
     .boxed()

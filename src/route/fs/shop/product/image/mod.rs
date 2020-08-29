@@ -8,6 +8,7 @@ use warp::{
     delete,
     path,
     body,
+    query,
     multipart::{
         form,
         FormData,
@@ -49,9 +50,11 @@ fn update_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     .and(state)
     .and_then(async move |user_id: Uuid, shop_id: Uuid, product_key: Uuid, image_data: Vec<u8>, state: State| -> HandlerResult<&'static str> {
         async {
-            let conn = state.db_pool().get().await?;
+            let mut connection = state.db_pool().get().await?;
+            let transaction = connection.transaction().await?;
+
             let (auth,) = query_one!(
-                conn,
+                transaction,
                 "SELECT check_shop_user_authority($1, $2, 'product_authority', 'all') AS auth;",
                 &[&UuidNN(shop_id), &UuidNN(user_id)],
                 (auth: bool),
@@ -59,12 +62,10 @@ fn update_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
 
             if !auth { return Err(Error::unauthorized()) }
 
-            if conn.query(
-                "SELECT key FROM query_shop_products($1) WHERE key = $2;",
-                &[&UuidNN(shop_id), &product_key],
-            ).await?.len() == 0 {
-                return Err(Error::data_not_found("Product"))
-            }
+            transaction.query(
+                "SELECT shop_set_product_has_picture($1, $2, $3);",
+                &[&UuidNN(shop_id), &UuidNN(product_key), &true],
+            ).await?;
 
             fs::store(
                 format!("{}/shop/{}/product/{}", *STORAGE_DIR, shop_id, product_key),
@@ -72,6 +73,8 @@ fn update_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
                 image_data,
             )
             .await?;
+
+            transaction.commit().await?;
 
             Ok("Successfully updated.")
         }
@@ -91,15 +94,14 @@ struct Args {
 
 fn read_filter() -> BoxedFilter<(impl Reply,)> {
     get()
-    .and(body::json())
+    .and(query())
     .map(|args: Args| {
         (
             format!("{}/shop/{}/product/{}/image.jpg", *STORAGE_DIR, args.shop_id, args.product_key),
-            format!("{}/default/shop/product/image.jpg", *STORAGE_DIR),
         )
     })
     .untuple_one()
-    .and_then(fs::read_with_default_handler)
+    .and_then(fs::read_handler)
     .boxed()
 }
 
@@ -108,11 +110,13 @@ fn delete_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     .and(cookie::to_user_id("USSID", state.clone()))
     .and(body::json())
     .and(state)
-    .and_then(async move |user_id: Uuid, args: Args, state: State| -> HandlerResult<String> {
+    .and_then(async move |user_id: Uuid, args: Args, state: State| -> HandlerResult<&'static str> {
         async {
-            let conn = state.db_pool().get().await?;
+            let mut connection = state.db_pool().get().await?;
+            let transaction = connection.transaction().await?;
+
             let (auth,) = query_one!(
-                conn,
+                transaction,
                 "SELECT check_shop_user_authority($1, $2, 'product_authority', 'all') AS auth;",
                 &[&args.shop_id, &UuidNN(user_id)],
                 (auth: bool),
@@ -120,19 +124,20 @@ fn delete_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
 
             if !auth { return Err(Error::unauthorized()) }
 
-            if conn.query(
-                "SELECT key FROM query_shop_products($1) WHERE key = $2;",
-                &[&args.shop_id, &args.product_key],
-            ).await?.len() == 0 {
-                return Err(Error::data_not_found("Product"))
-            }
+            transaction.query(
+                "SELECT shop_set_product_has_picture($1, $2, $3);",
+                &[&args.shop_id, &args.product_key, &false],
+            ).await?;
 
-            Ok(format!("{}/shop/{}/product/{}/image.jpg", *STORAGE_DIR, args.shop_id, args.product_key))
+            fs::delete(format!("{}/shop/{}/product/{}/image.jpg", *STORAGE_DIR, args.shop_id, args.product_key)).await?;
+
+            transaction.commit().await?;
+
+            Ok("Successfully delete image.")
         }
         .await
         .map_err(|err: Error| reject::custom(err))
     })
-    .and_then(fs::delete_handler)
     .boxed()
 }
 

@@ -28,7 +28,6 @@ use crate::{
         },
     },
     sql::{
-        from_str,
         TextNN,
         UuidNN,
     },
@@ -70,6 +69,11 @@ fn create_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
             )?;
             
             if let Some(data) = image {
+                transaction.query(
+                    "SELECT shop_set_product_has_picture($1, $2, $3);",
+                    &[&UuidNN(shop_id), &UuidNN(product_key), &true],
+                ).await?;
+
                 fs::store(
                     format!("{}/shop/{}/product/{}", *STORAGE_DIR, shop_id, product_key),
                     "image.jpg".to_string(),
@@ -89,9 +93,7 @@ fn create_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
 
 #[derive(Serialize, Deserialize)]
 struct DeleteArgs {
-    #[serde(deserialize_with = "from_str")]
     shop_id: UuidNN,
-    #[serde(deserialize_with = "from_str")]
     product_key: UuidNN,
 }
 
@@ -102,22 +104,25 @@ fn delete_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     .and(state)
     .and_then(async move |user_id: Uuid, args: DeleteArgs, state: State| -> HandlerResult<&'static str> {
         async {
-            let conn = state.db_pool().get().await?;
+            let connection = state.db_pool().get().await?;
+
             let (ok,) = query_one!(
-                conn,
+                connection,
                 "SELECT check_shop_user_authority($1, $2, 'product_authority', 'all') AS ok;",
                 &[&args.shop_id, &UuidNN(user_id)],
                 (ok: bool),
             )?;
-            if ok {
-                conn.execute(
-                    "SELECT shop_delete_product($1, $2)",
-                    &[&args.shop_id, &args.product_key],
-                ).await?;
-                Ok("Successfully deleted product.")
-            } else {
-                Err(Error::unauthorized())
-            }
+
+            if !ok { return Err(Error::unauthorized()) }
+
+            connection.execute(
+                "SELECT shop_delete_product($1, $2)",
+                &[&args.shop_id, &args.product_key],
+            ).await?;
+
+            let _ = fs::delete_all(format!("{}/shop/{}/product/{}", *STORAGE_DIR, args.shop_id, args.product_key)).await;
+
+            Ok("Successfully deleted product.")
         }
         .await
         .map_err(|err: Error| reject::custom(err))
@@ -127,9 +132,7 @@ fn delete_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
 
 #[derive(Serialize, Deserialize)]
 struct UpdateArgs {
-    #[serde(deserialize_with = "from_str")]
     shop_id: UuidNN,
-    #[serde(deserialize_with = "from_str")]
     product_key: UuidNN,
     payload: TextNN,
 }
