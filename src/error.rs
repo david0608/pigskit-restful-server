@@ -182,11 +182,7 @@ impl From<tokio_postgres::error::Error> for Error {
                 Error::session_expired("GSSID")
             }
             "C4101" => {
-                Error::new(
-                    StatusCode::BAD_REQUEST,
-                    "CusSelNotFound".to_string(),
-                    "Selection not found for the customize.".to_string(),
-                )
+                Error::data_not_found("customize_selection")
             }
             "C4301" => {
                 Error::new(
@@ -203,18 +199,13 @@ impl From<tokio_postgres::error::Error> for Error {
                 )
             }
             "C6009" => {
-                Error::new(
-                    StatusCode::BAD_REQUEST,
-                    "ShopProductNotFound".to_string(),
-                    "Product not found for the shop.".to_string(),
-                )
+                Error::data_not_found("shop_product")
+            }
+            "C8001" => {
+                Error::data_not_found("cart")
             }
             "C8002" => {
-                Error::new(
-                    StatusCode::BAD_REQUEST,
-                    "CartItemNotFound".to_string(),
-                    "Item not found for the cart.".to_string(),
-                )
+                Error::data_not_found("cart_item")
             }
             _ => {
                 Error::internal(err.into())
