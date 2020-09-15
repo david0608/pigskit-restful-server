@@ -15,17 +15,28 @@ pub struct Error {
     http_status: StatusCode,
     r#type: String,
     message: String,
+    data: Option<String>,
     inner: Option<InnerError>,
 }
 
 impl Error {
-    fn new(http_status: StatusCode, r#type: String, message: String) -> Self {
+    fn new(http_status: StatusCode, r#type: &str, message: &str, data: Option<String>) -> Self {
         Error {
             http_status: http_status,
-            r#type: r#type,
-            message: message,
+            r#type: r#type.to_string(),
+            message: message.to_string(),
+            data: data,
             inner: None,
         }
+    }
+
+    pub fn bad_request(r#type: &str, message: &str, data: Option<String>) -> Self {
+        Self::new(
+            StatusCode::BAD_REQUEST,
+            r#type,
+            message,
+            data,
+        )
     }
 
     fn internal(inner: InnerError) -> Self {
@@ -33,95 +44,98 @@ impl Error {
             http_status: StatusCode::INTERNAL_SERVER_ERROR,
             r#type: "InternalServerError".to_string(),
             message: "Internal server error.".to_string(),
+            data: None,
             inner: Some(inner),
         }
     }
 
     pub fn unsupported_operation() -> Self {
-        Self::new(
-            StatusCode::BAD_REQUEST,
-            "UnsuportedOperation".to_string(),
-            "Unsupported operation.".to_string(),
+        Self::bad_request(
+            "UnsuportedOperation",
+            "Unsupported operation.",
+            None,
         )
     }
 
     pub fn operation_failed() -> Self {
-        Self::new(
-            StatusCode::BAD_REQUEST,
-            "OperationFailed".to_string(),
-            "Operation failed.".to_string(),
+        Self::bad_request(
+            "OperationFailed",
+            "Operation failed.",
+            None,
         )
     }
 
     pub fn unauthorized() -> Self {
         Self::new(
             StatusCode::FORBIDDEN,
-            "Unauthorized".to_string(),
-            "Unauthorized.".to_string(),
+            "Unauthorized",
+            "Unauthorized.",
+            None,
         )
     }
 
     pub fn missing_body(field: &str) -> Self {
-        Self::new(
-            StatusCode::BAD_REQUEST,
-            "BodyMissingField".to_string(),
-            format!(r#"Missing field "{}" in request body."#, field),
+        Self::bad_request(
+            "BodyMissingField",
+            format!(r#"Missing field "{}" in request body."#, field).as_str(),
+            None,
         )
     }
 
     pub fn invalid_data(field: &str) -> Self {
-        Self::new(
-            StatusCode::BAD_REQUEST,
-            "InvalidData".to_string(),
-            format!(r#"Invalid data in field "{}" in request body."#, field),
+        Self::bad_request(
+            "InvalidData",
+            format!(r#"Invalid data in field "{}" in request body."#, field).as_str(),
+            None,
         )
     }
 
     pub fn no_valid_form(part: &str) -> Self {
-        Self::new(
-            StatusCode::BAD_REQUEST,
-            "FormMissingPart".to_string(),
-            format!(r#"Missing or invalid part "{}" in form."#, part),
+        Self::bad_request(
+            "FormMissingPart",
+            format!(r#"Missing or invalid part "{}" in form."#, part).as_str(),
+            None,
         )
     }
 
     pub fn no_valid_cookie(name: &str) -> Self {
-        Self::new(
-            StatusCode::BAD_REQUEST,
-            "NoValidCookie".to_string(),
-            format!(r#"Missing or invalid cookie "{}" in request."#, name),
+        Self::bad_request(
+            "NoValidCookie",
+            format!(r#"Missing or invalid cookie "{}" in request."#, name).as_str(),
+            None,
         )
     }
 
     pub fn session_expired(name: &str) -> Self {
-        Self::new(
-            StatusCode::BAD_REQUEST,
-            "SessionExpired".to_string(),
-            format!(r#"Session for cookie "{}" has expired."#, name),
+        Self::bad_request(
+            "SessionExpired",
+            format!(r#"Session for cookie "{}" has expired."#, name).as_str(),
+            None,
         )
     }
 
     pub fn unique_data_conflict(name: &str) -> Self {
         Self::new(
             StatusCode::CONFLICT,
-            "UniqueDataConflict".to_string(),
-            format!(r#"The unique data "{}" existed."#, name),
+            "UniqueDataConflict",
+            format!(r#"The unique data "{}" existed."#, name).as_str(),
+            None,
         )
     }
 
     pub fn data_not_found(name: &str) -> Self {
-        Self::new(
-            StatusCode::BAD_REQUEST,
-            "DataNotFound".to_string(),
-            format!(r#"Data "{}" not found."#, name),
+        Self::bad_request(
+            "DataNotFound",
+            format!(r#"Data "{}" not found."#, name).as_str(),
+            None,
         )
     }
 
     pub fn payload_too_large() -> Self {
-        Self::new(
-            StatusCode::BAD_REQUEST,
-            "PayloadTooLarge".to_string(),
-            "Size of request payload too large.".to_string(),
+        Self::bad_request(
+            "PayloadTooLarge",
+            "Size of request payload too large.",
+            None,
         )
     }
 
@@ -185,17 +199,17 @@ impl From<tokio_postgres::error::Error> for Error {
                 Error::data_not_found("customize_selection")
             }
             "C4301" => {
-                Error::new(
-                    StatusCode::BAD_REQUEST,
-                    "CusSelNotProvided".to_string(),
-                    "Customize selection not provided.".to_string(),
+                Error::bad_request(
+                    "CusSelNotProvided",
+                    "Customize selection not provided.",
+                    None,
                 )
             }
             "C6001" => {
-                Error::new(
-                    StatusCode::BAD_REQUEST,
-                    "ShopNameUsed".to_string(),
-                    "Shop name has been used.".to_string(),
+                Error::bad_request(
+                    "ShopNameUsed",
+                    "Shop name has been used.",
+                    None,
                 )
             }
             "C6009" => {
@@ -206,6 +220,13 @@ impl From<tokio_postgres::error::Error> for Error {
             }
             "C8002" => {
                 Error::data_not_found("cart_item")
+            }
+            "C8103" => {
+                Error::bad_request(
+                    "CartItemExpired",
+                    "Cart item expired.",
+                    None,
+                )
             }
             _ => {
                 Error::internal(err.into())
@@ -221,15 +242,27 @@ struct ApiError<'a> {
     status: u16,
     r#type: &'a String,
     message: &'a String,
+    data: serde_json::Value,
 }
 
 impl Reply for &Error {
     fn into_response(self) -> Response {
+        let data = if let Some(data) = &self.data {
+            if let Ok(data) = serde_json::from_str(&data) {
+                data
+            } else {
+                serde_json::Value::Null
+            }
+        } else {
+            serde_json::Value::Null
+        };
+
         with_status(
             json(&ApiError {
                 status: self.http_status.as_u16(),
                 r#type: &self.r#type,
                 message: &self.message,
+                data: data,
             }),
             self.http_status,
         )
