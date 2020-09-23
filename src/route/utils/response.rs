@@ -8,12 +8,17 @@ use warp::{
     http,
     redirect,
 };
+use chrono::{
+    Utc,
+    Duration,
+};
 
-pub fn set_cookie(cookie: String) -> Response {
+pub fn set_cookie(name: &str, value: &str, duration: i64) -> Response {
+    let expire = Utc::now() + Duration::days(duration);
     with_header(
         reply(),
         "Set-Cookie",
-        cookie,
+        format!("{}={}; Path=/; Expires={}; HttpOnly", name, value, expire.format("%a, %d %b %Y %T GMT")),
     ).into_response()
 }
 

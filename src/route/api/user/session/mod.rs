@@ -58,7 +58,7 @@ fn create_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
             ).await?;
             
             if let Ok(session_id) = row.try_get::<&str, Uuid>("id") {
-                Ok(response::set_cookie(format!("USSID={}; Path=/; HttpOnly", session_id)))
+                Ok(response::set_cookie("USSID", &session_id.to_string(), 30))
             } else {
                 return Err(Error::unauthorized())
             }
@@ -109,7 +109,7 @@ fn delete_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
                     &[&UuidNN(ussid)],
                 ).await;
             }
-            Ok(response::set_cookie("USSID=; Path=/; HttpOnly".to_owned()))
+            Ok(response::set_cookie("USSID", "", 0))
         }
         .await
         .map_err(|err: Error| reject::custom(err))

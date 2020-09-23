@@ -103,7 +103,7 @@ fn post_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
                 &[],
                 (id: Uuid),
             )?;
-            Ok(set_cookie(format!("REGSSID={}; Path=/; HttpOnly", regssid)))
+            Ok(set_cookie("REGSSID", &regssid.to_string(), 1))
         }
         .await
         .map_err(|err: Error| reject::custom(err))

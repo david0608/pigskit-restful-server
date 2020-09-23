@@ -48,7 +48,7 @@ fn put_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
                 (gssid: Uuid),
             )?;
 
-            Ok(response::set_cookie(format!("GSSID={}; Path=/; HttpOnly", gssid)))
+            Ok(response::set_cookie("GSSID", &gssid.to_string(), 1))
         }
         .await
         .map_err(|err: Error| reject::custom(err))
