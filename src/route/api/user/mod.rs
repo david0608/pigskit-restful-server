@@ -8,6 +8,7 @@ use crate::state::State;
 
 mod register;
 mod session;
+mod profile;
 
 pub fn filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     path("register").and(
@@ -16,6 +17,11 @@ pub fn filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     .or(
         path("session").and(
             session::filter(state.clone())
+        )
+    )
+    .or(
+        path("profile").and(
+            profile::filter(state.clone())
         )
     )
     .boxed()

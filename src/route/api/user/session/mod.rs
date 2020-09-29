@@ -73,6 +73,8 @@ fn create_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
 struct GetRes {
     username: Option<String>,
     nickname: Option<String>,
+    email: Option<String>,
+    phone: Option<String>,
 }
 fn get_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     get()
@@ -82,12 +84,22 @@ fn get_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
         async {
             let conn = state.db_pool().get().await?;
             let row = conn.query_one(
-                "SELECT username, nickname FROM users WHERE id = $1",
+                "SELECT
+                    username,
+                    nickname,
+                    email,
+                    phone
+                FROM
+                    users
+                WHERE
+                    id = $1",
                 &[&user_id],
             ).await?;
             Ok(json(&GetRes {
                 username: row.get("username"),
                 nickname: row.get("nickname"),
+                email: row.get("email"),
+                phone: row.get("phone"),
             }))
         }
         .await

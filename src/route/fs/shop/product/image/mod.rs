@@ -3,12 +3,10 @@ use warp::{
     reply::Reply,
     filters::BoxedFilter,
     reject,
-    get,
     post,
     delete,
     path,
     body,
-    query,
     multipart::{
         form,
         FormData,
@@ -28,10 +26,7 @@ use crate::{
             fs,
         },
     },
-    sql::{
-        from_str,
-        UuidNN,
-    },
+    sql::UuidNN,
     state::State,
     error::Error,
     STORAGE_DIR,
@@ -84,25 +79,10 @@ fn update_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     .boxed()
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize)]
 struct Args {
-    #[serde(deserialize_with = "from_str")]
     shop_id: UuidNN,
-    #[serde(deserialize_with = "from_str")]
     product_key: UuidNN,
-}
-
-fn read_filter() -> BoxedFilter<(impl Reply,)> {
-    get()
-    .and(query())
-    .map(|args: Args| {
-        (
-            format!("{}/shop/{}/product/{}/image.jpg", *STORAGE_DIR, args.shop_id, args.product_key),
-        )
-    })
-    .untuple_one()
-    .and_then(fs::read_handler)
-    .boxed()
 }
 
 fn delete_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
@@ -144,7 +124,6 @@ fn delete_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
 pub fn filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     path::end().and(
         update_filter(state.clone())
-        .or(read_filter())
         .or(delete_filter(state.clone()))
     )
     .boxed()

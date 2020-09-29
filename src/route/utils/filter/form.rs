@@ -20,6 +20,16 @@ macro_rules! form_filter {
         form_filter!( PARSE $pair $field $($type)+ )
     };
 
+    ( PARSE $pair:ident $field:ident bool ) => {
+        if let Ok(bool_string) = String::from_utf8($pair.1) {
+            if let "true" = bool_string.as_str() {
+                $field = Some(true)
+            } else {
+                $field = Some(false)
+            }
+        }
+    };
+
     ( PARSE $pair:ident $field:ident Uuid ) => {
         if let Ok(id_string) = String::from_utf8($pair.1) {
             if let Ok(id) = Uuid::parse_str(id_string.as_str()) {

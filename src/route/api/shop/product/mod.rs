@@ -36,6 +36,8 @@ use crate::{
     STORAGE_DIR,
 };
 
+mod image;
+
 fn create_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     post()
     .and(cookie::to_user_id("USSID", state.clone()))
@@ -172,6 +174,11 @@ pub fn filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
         create_filter(state.clone())
         .or(delete_filter(state.clone()))
         .or(update_filter(state.clone()))
+    )
+    .or(
+        path("image").and(
+            image::filter()
+        )
     )
     .boxed()
 }

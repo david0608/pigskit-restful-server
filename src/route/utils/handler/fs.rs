@@ -37,7 +37,7 @@ pub async fn delete(file: String) -> Result<(), std::io::Error> {
 }
 
 pub async fn delete_all(file: String) -> Result<(), std::io::Error> {
-    fs:: remove_dir_all(file)
+    fs::remove_dir_all(file)
     .await
 }
 
@@ -61,19 +61,6 @@ pub async fn read_handler(file: String) -> HandlerResult<Vec<u8>> {
         let err: Error = err.into();
         reject::custom(err)
     })?;
-    Ok(data)
-}
-
-pub async fn read_with_default_handler(file: String, default_file: String) -> HandlerResult<Vec<u8>> {
-    let data = read(file)
-        .or_else(|_| {
-            read(default_file)
-        })
-        .await
-        .map_err(|err| {
-            let err: Error = err.into();
-            reject::custom(err)
-        })?;
     Ok(data)
 }
 
