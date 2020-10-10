@@ -85,7 +85,7 @@ fn create_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
             }
 
             transaction.commit().await?;
-            Ok("Succefully created.")
+            Ok("Successfully created.")
         }
         .await
         .map_err(|err: Error| reject::custom(err))
@@ -132,36 +132,82 @@ fn delete_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     .boxed()
 }
 
-#[derive(Serialize, Deserialize)]
-struct UpdateArgs {
-    shop_id: UuidNN,
-    product_key: UuidNN,
-    payload: TextNN,
-}
-
-fn update_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
+fn patch_filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     patch()
     .and(cookie::to_user_id("USSID", state.clone()))
-    .and(body::json())
+    .and(
+        form_filter!(
+            shop_id [ Uuid ]
+            product_key [ Uuid ]
+            payload [ Option [ String ] ]
+            delete_image [ Option [ bool ] ]
+            image [ Option [ Vec<u8> ] ]
+        )
+    )
     .and(state)
-    .and_then(async move |user_id: Uuid, args: UpdateArgs, state: State| -> HandlerResult<&'static str> {
+    .and_then(async move |user_id: Uuid, shop_id: Uuid, product_key: Uuid, payload: Option<String>, delete_image: Option<bool>, image: Option<Vec<u8>>, state: State| -> HandlerResult<&'static str> {
         async {
-            let conn = state.db_pool().get().await?;
+            let mut connection = state.db_pool().get().await?;
+            let transaction = connection.transaction().await?;
+
             let (ok,) = query_one!(
-                conn,
+                transaction,
                 "SELECT check_shop_user_authority($1, $2, 'product_authority', 'all') AS ok;",
-                &[&args.shop_id, &UuidNN(user_id)],
+                &[
+                    &UuidNN(shop_id),
+                    &UuidNN(user_id),
+                ],
                 (ok: bool),
             )?;
-            if ok {
-                conn.execute(
+
+            if !ok { return Err(Error::unauthorized()) }
+
+            if let Some(payload) = payload {
+                transaction.execute(
                     "SELECT shop_update_product($1, $2, $3);",
-                    &[&args.shop_id, &args.product_key, &args.payload],
+                    &[
+                        &UuidNN(shop_id),
+                        &UuidNN(product_key),
+                        &TextNN(payload),
+                    ],
                 ).await?;
-                Ok("Seccessfully updated product.")
-            } else {
-                Err(Error::unauthorized())
             }
+            
+            let delete_image = if let Some(delete_image) = delete_image {
+                delete_image
+            } else {
+                false
+            };
+
+            if delete_image {
+                transaction.execute(
+                    "SELECT shop_set_product_has_picture($1, $2, $3);",
+                    &[
+                        &UuidNN(shop_id),
+                        &UuidNN(product_key),
+                        &false,
+                    ],
+                ).await?;
+                fs::delete(format!("{}/shop/{}/product/{}/image.jpg", *STORAGE_DIR, shop_id, product_key)).await?;
+            } else if let Some(image) = image {
+                transaction.execute(
+                    "SELECT shop_set_product_has_picture($1, $2, $3);",
+                    &[
+                        &UuidNN(shop_id),
+                        &UuidNN(product_key),
+                        &true,
+                    ],
+                ).await?;
+                fs::store(
+                    format!("{}/shop/{}/product/{}", *STORAGE_DIR, shop_id, product_key),
+                    "image.jpg".to_string(),
+                    image,
+                )
+                .await?;
+            }
+
+            transaction.commit().await?;
+            Ok("Successfully updated.")
         }
         .await
         .map_err(|err: Error| reject::custom(err))
@@ -173,7 +219,7 @@ pub fn filter(state: BoxedFilter<(State,)>) -> BoxedFilter<(impl Reply,)> {
     path::end().and(
         create_filter(state.clone())
         .or(delete_filter(state.clone()))
-        .or(update_filter(state.clone()))
+        .or(patch_filter(state.clone()))
     )
     .or(
         path("image").and(
