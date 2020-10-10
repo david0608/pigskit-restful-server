@@ -22,6 +22,7 @@ pub fn set_cookie(name: &str, value: &str, duration: i64) -> Response {
     ).into_response()
 }
 
+#[allow(dead_code)]
 pub fn redirect_to(uri: &'static str) -> Response {
     redirect(http::Uri::from_static(uri)).into_response()
 }

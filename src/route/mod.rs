@@ -21,18 +21,12 @@ use crate::{
 
 #[macro_use] mod utils;
 mod api;
-mod fs;
 
 pub fn routes(state: State) -> BoxedFilter<(impl Reply,)> {
     let state = warp::any().map(move || state.clone()).boxed();
 
     path("api").and(
         api::filter(state.clone())
-    )
-    .or(
-        path("fs").and(
-            fs::filter(state.clone())
-        )
     )
     .recover(async move |rejection: Rejection| -> Result<Response, Rejection> {
         if rejection.is_not_found() {

@@ -42,6 +42,7 @@ pub async fn delete_all(file: String) -> Result<(), std::io::Error> {
 }
 
 type StoreResult = impl Future<Output = HandlerResult<&'static str>> + Send;
+#[allow(dead_code)]
 pub fn store_handler() -> impl Fn(String, String, Vec<u8>) -> StoreResult + Clone {
     async move |dir: String, name: String, buf: Vec<u8>| {
         store(dir, name, buf)
@@ -64,6 +65,7 @@ pub async fn read_handler(file: String) -> HandlerResult<Vec<u8>> {
     Ok(data)
 }
 
+#[allow(dead_code)]
 pub async fn delete_handler(file: String) -> HandlerResult<&'static str> {
     delete(file)
     .await
