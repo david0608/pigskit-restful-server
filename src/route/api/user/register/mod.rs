@@ -28,13 +28,13 @@ use crate::{
 };
 
 lazy_static! {
-    static ref RE_VALID_EMAIL: Regex = Regex::new(r#"^\w+@(?:\w+\.)+\w+$"#).unwrap();
+    static ref RE_VALID_EMAIL: Regex = Regex::new(r#"^\w+(?:\.\w+)*@(?:\w+\.)+\w+$"#).unwrap();
     static ref RE_VALID_PHONE: Regex = Regex::new(r#"^09\d{8}$"#).unwrap();
     static ref RE_VALID_USERNAME: Regex = Regex::new(r#"^[A-Za-z0-9]+$"#).unwrap();
     static ref RE_VALID_PASSWORD: Regex = Regex::new(r#"^[A-Za-z0-9]+$"#).unwrap();
     static ref RE_VALID_PASSWORD_UPPER: Regex = Regex::new(r#"[A-Z]"#).unwrap();
     static ref RE_VALID_PASSWORD_LOWER: Regex = Regex::new(r#"[a-z]"#).unwrap();
-    static ref RE_VALID_PASSWORD_NUMBER: Regex = Regex::new(r#"[0-9]"#).unwrap();    
+    static ref RE_VALID_PASSWORD_NUMBER: Regex = Regex::new(r#"[0-9]"#).unwrap();
 }
 
 #[derive(Deserialize)]
