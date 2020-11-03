@@ -18,7 +18,7 @@ pub fn set_cookie(name: &str, value: &str, duration: i64) -> Response {
     with_header(
         reply(),
         "Set-Cookie",
-        format!("{}={}; Path=/; Expires={}; HttpOnly", name, value, expire.format("%a, %d %b %Y %T GMT")),
+        format!("{}={}; Path=/; Expires={}; HttpOnly; SameSite=Strict", name, value, expire.format("%a, %d %b %Y %T GMT")),
     ).into_response()
 }
 
