@@ -14,7 +14,10 @@ use crate::{
 pub fn to_user_id(name: &'static str, state: BoxedFilter<(State,)>) -> BoxedFilter<(Uuid,)> {
     to_uuid_optional(name)
     .and(state)
-    .and_then(async move |cookie: Option<Uuid>, state: State| {
+    .and(
+        warp::any().map(move || name.to_owned()).boxed()
+    )
+    .and_then(async |cookie: Option<Uuid>, state: State, name: String| {
         async {
             if let Some(ussid) = cookie {
                 let conn = state.db_pool().get().await?;
@@ -26,7 +29,7 @@ pub fn to_user_id(name: &'static str, state: BoxedFilter<(State,)>) -> BoxedFilt
                 )?;
                 Ok(user_id)
             } else {
-                Err(Error::no_valid_cookie(name))
+                Err(Error::no_valid_cookie(name.as_ref()))
             }
         }
         .await
@@ -53,9 +56,12 @@ pub fn to_uuid_optional(name: &'static str) -> BoxedFilter<(Option<Uuid>,)> {
 
 pub fn to_uuid(name: &'static str) -> BoxedFilter<(Uuid,)> {
     to_uuid_optional(name)
-    .and_then(async move |cookie: Option<Uuid>| {
+    .and(
+        warp::any().map(move || name.to_owned()).boxed()
+    )
+    .and_then(async |cookie: Option<Uuid>, name: String| {
         cookie.ok_or(
-            reject::custom(Error::no_valid_cookie(name))
+            reject::custom(Error::no_valid_cookie(name.as_ref()))
         )
     })
     .boxed()
